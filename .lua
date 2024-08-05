@@ -1,10 +1,10 @@
 local Settings = {
     Color = Color3.fromRGB(255, 203, 138), -- Color of the line
     Thickness = 1, -- Thickness of the line (Overruled by AutoThickness if activated)
-    Transparency = 1, -- 1 Visible - 0 Not Visible
+    Transparency = 0.8, -- 1 Visible - 0 Not Visible
     AutoThickness = true, -- Makes Thickness above futile, scales according to distance, good for less encumbered screen
-    Length = 15, -- In studs of the line
-    Smoothness = 0.2 -- 0.01 - Less Smooth(Faster), 1 - Smoother (Slower)
+    Length = 10, -- In studs of the line
+    Smoothness = 0.01 -- 0.01 - Less Smooth(Faster), 1 - Smoother (Slower)
 }
 
 local toggle = true -- use this variable if you wanna integrate into a GUI
