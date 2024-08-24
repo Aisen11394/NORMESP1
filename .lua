@@ -1,73 +1,307 @@
-local Settings = {
-    Color = Color3.fromRGB(255, 203, 138), -- Color of the line
-    Thickness = 1, -- Thickness of the line (Overruled by AutoThickness if activated)
-    Transparency = 0.8, -- 1 Visible - 0 Not Visible
-    AutoThickness = true, -- Makes Thickness above futile, scales according to distance, good for less encumbered screen
-    Length = 10, -- In studs of the line
-    Smoothness = 0.01 -- 0.01 - Less Smooth(Faster), 1 - Smoother (Slower)
+local WAIT = task.wait
+local TBINSERT = table.insert
+local TBFIND = table.find
+local TBREMOVE = table.remove
+local V2 = Vector2.new
+local ROUND = math.round
+
+local RS = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local To2D = Camera.WorldToViewportPoint
+local LocalPlayer = game.Players.LocalPlayer
+
+-- Only thing for now is Skeleton
+local Library = {};
+Library.__index = Library;
+
+-- Functions
+function Library:NewLine(info)
+	local l = Drawing.new("Line")
+	l.Visible = info.Visible or true;
+	l.Color = info.Color or Color3.fromRGB(0,255,0);
+	l.Transparency = info.Transparency or 1;
+	l.Thickness = info.Thickness or 1;
+	return l
+end
+
+function Library:Smoothen(v)
+	return V2(ROUND(v.X), ROUND(v.Y))
+end
+
+-- Skeleton Object
+local Skeleton = {
+	Removed = false;
+	Player = nil;
+	Visible = false;
+	Lines = {};
+	Color = Color3.fromRGB(0,255,0);
+	Alpha = 1;
+	Thickness = 1;
+	DoSubsteps = true;
 }
+Skeleton.__index = Skeleton;
 
-local toggle = true -- use this variable if you wanna integrate into a GUI
+function Skeleton:UpdateStructure()
+	if not self.Player.Character then return end
 
-local player = game:GetService("Players").LocalPlayer
-local camera = game:GetService("Workspace").CurrentCamera
+	self:RemoveLines();
 
-local function ESP(plr) --//Main function handling specific plr loop esp for line etc
-    local line = Drawing.new("Line") --// Parse and Set the line for tracer
-    line.Visible = false
-    line.From = Vector2.new(0, 0)
-    line.To = Vector2.new(0, 0)
-    line.Color = Settings.Color
-    line.Thickness = Settings.Thickness
-    line.Transparency = Settings.Transparency
+	for _, part in next, self.Player.Character:GetChildren() do		
+		if not part:IsA("BasePart") then
+			continue;
+		end
 
-    local function Updater() --// Function to update the ESP therefore, line destinations etc every /render/
-        local connection
-        connection = game:GetService("RunService").RenderStepped:Connect(function() -- Putting function in a connection var in order to disconnect if needed, to save performance
-            if toggle and plr.Character ~= nil and plr.Character:FindFirstChild("Humanoid") ~= nil and plr.Character:FindFirstChild("HumanoidRootPart") ~= nil and plr.Character.Humanoid.Health > 0 and plr.Character:FindFirstChild("Head") ~= nil then
-                local headpos, OnScreen = camera:WorldToViewportPoint(plr.Character.Head.Position)
-                if OnScreen then -- checks if player is on screen or not
-                    local offsetCFrame = CFrame.new(0, 0, -Settings.Length)
-                    local check = false
-                    line.From = Vector2.new(headpos.X, headpos.Y)
-                    if Settings.AutoThickness then
-                        local distance = (player.Character.HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).magnitude --//AutoThickness
-                        local value = math.clamp(1/distance*100, 0.1, 3) --0.1 is min thickness, 4 is max
-                        line.Thickness = value
-                    end
-                    repeat
-                        local dir = plr.Character.Head.CFrame:ToWorldSpace(offsetCFrame)
-                        offsetCFrame = offsetCFrame * CFrame.new(0, 0, Settings.Smoothness)
-                        local dirpos, vis = camera:WorldToViewportPoint(Vector3.new(dir.X, dir.Y, dir.Z))
-                        if vis then
-                            check = true
-                            line.To = Vector2.new(dirpos.X, dirpos.Y)
-                            line.Visible = true
-                            offsetCFrame = CFrame.new(0, 0, -Settings.Length)
-                        end
-                    until check == true
-                else 
-                    line.Visible = false
-                end
-            else 
-                line.Visible = false
-                if game.Players:FindFirstChild(plr.Name) == nil then
-                    connection:Disconnect()
-                end
-            end
-        end)
-    end
-    coroutine.wrap(Updater)()
+		for _, link in next, part:GetChildren() do			
+			if not link:IsA("Motor6D") then
+				continue;
+			end
+			
+			TBINSERT(
+				self.Lines,
+				{
+					Library:NewLine({
+						Visible = self.Visible;
+						Color = self.Color;
+						Transparency = self.Alpha;
+						Thickness = self.Thickness;
+					}),
+					Library:NewLine({
+						Visible = self.Visible;
+						Color = self.Color;
+						Transparency = self.Alpha;
+						Thickness = self.Thickness;
+					}),
+					part.Name,
+					link.Name
+				}
+			);
+		end
+	end
 end
 
-for i, v in pairs(game:GetService("Players"):GetPlayers()) do
-    if v.Name ~= player.Name then
-        coroutine.wrap(ESP)(v)
-    end
+function Skeleton:SetVisible(State)
+	for _,l in pairs(self.Lines) do
+		l[1].Visible = State;
+		l[2].Visible = State;
+	end
 end
 
-game.Players.PlayerAdded:Connect(function(newplr)
-    if newplr.Name ~= player.Name then
-        coroutine.wrap(ESP)(newplr)
-    end
-end)
+function Skeleton:SetColor(Color)
+	self.Color = Color;
+	for _,l in pairs(self.Lines) do
+		l[1].Color = Color;
+		l[2].Color = Color;
+	end
+end
+
+function Skeleton:SetAlpha(Alpha)
+	self.Alpha = Alpha;
+	for _,l in pairs(self.Lines) do
+		l[1].Transparency = Alpha;
+		l[2].Transparency = Alpha;
+	end
+end
+
+function Skeleton:SetThickness(Thickness)
+	self.Thickness = Thickness;
+	for _,l in pairs(self.Lines) do
+		l[1].Thickness = Thickness;
+		l[2].Thickness = Thickness;
+	end
+end
+
+function Skeleton:SetDoSubsteps(State)
+	self.DoSubsteps = State;
+end
+
+-- Main Update Loop
+function Skeleton:Update()
+	if self.Removed then
+		return;
+	end
+
+	local Character = self.Player.Character;
+	if not Character then
+		self:SetVisible(false);
+		if not self.Player.Parent then
+			self:Remove();
+		end
+		return;
+	end
+
+	local Humanoid = Character:FindFirstChildOfClass("Humanoid");
+	if not Humanoid then
+		self:SetVisible(false);
+		return;
+	end
+
+	self:SetColor(self.Color);
+	self:SetAlpha(self.Alpha);
+	self:SetThickness(self.Thickness);
+
+	local update = false;
+	for _, l in pairs(self.Lines) do
+		local part = Character:FindFirstChild(l[3])
+		if not part then
+			l[1].Visible = false;
+			l[2].Visible = false;
+			update = true;
+			continue;
+		end
+
+		local link = part:FindFirstChild(l[4])
+		if not (link and link.part0 and link.part1) then
+			l[1].Visible = false;
+			l[2].Visible = false;
+			update = true;
+			continue;
+		end
+
+		local part0 = link.Part0;
+		local part1 = link.Part1;
+		
+		if self.DoSubsteps and link.C0 and link.C1 then
+			local c0 = link.C0;
+			local c1 = link.C1;
+
+			-- Center of part0 to c0
+			local part0p, v1 = To2D(Camera, part0.CFrame.p);
+			local part0cp, v2 = To2D(Camera, (part0.CFrame * c0).p);
+			
+			if v1 and v2 then
+				l[1].From = V2(part0p.x, part0p.y);
+				l[1].To = V2(part0cp.x, part0cp.y);
+
+				l[1].Visible = true;
+			else 
+				l[1].Visible = false;
+			end
+			
+			-- Center of part1 to c1
+			local part1p, v3 = To2D(Camera, part1.CFrame.p);
+			local part1cp, v4 = To2D(Camera, (part1.CFrame * c1).p);
+		
+			if v3 and v4 then
+				l[2].From = V2(part1p.x, part1p.y);
+				l[2].To = V2(part1cp.x, part1cp.y);
+
+				l[2].Visible = true;
+			else 
+				l[2].Visible = false;
+			end
+		else					
+			local part0p, v1 = To2D(Camera, part0.CFrame.p);
+			local part1p, v2 = To2D(Camera, part1.CFrame.p);
+			
+			if v1 and v2 then
+				l[1].From = V2(part0p.x, part0p.y);
+				l[1].To = V2(part1p.x, part1p.y);
+
+				l[1].Visible = true;
+			else 
+				l[1].Visible = false;
+			end
+			
+			l[2].Visible = false;
+		end
+	end
+	
+	if update or #self.Lines == 0 then
+		self:UpdateStructure();
+	end
+end
+
+function Skeleton:Toggle()
+	self.Visible = not self.Visible;
+
+	if self.Visible then 
+		self:RemoveLines();
+		self:UpdateStructure();
+		
+		local c;c = RS.Heartbeat:Connect(function()
+			if not self.Visible then
+				self:SetVisible(false);
+				c:Disconnect();
+				return;
+			end
+
+			self:Update();
+		end)
+	end
+end
+
+function Skeleton:RemoveLines()
+	for _,l in pairs(self.Lines) do
+		l[1]:Remove();
+		l[2]:Remove();
+	end
+	self.Lines = {};
+end
+
+function Skeleton:Remove()
+	self.Removed = true;
+	self:RemoveLines();
+end
+
+-- Create Skeleton Function
+function Library:NewSkeleton(Player, Visible, Color, Alpha, Thickness, DoSubsteps)
+	if not Player then
+		error("Missing Player argument (#1)")
+	end
+	
+	local s = setmetatable({}, Skeleton);
+
+	s.Player = Player;
+	s.Bind = Player.UserId;
+	
+	if DoSubsteps ~= nil then
+		s.DoSubsteps = DoSubsteps;
+	end
+	
+	if Color then
+		s:SetColor(Color)
+	end
+	
+	if Alpha then
+		s:SetAlpha(Alpha)
+	end
+	
+	if Thickness then
+		s:SetThickness(Thickness)
+	end
+
+	if Visible then
+		s:Toggle();
+	end
+
+	return s;
+end
+
+-- LIBRARY FORMAT
+if true then
+	return Library;
+end
+
+-- TEST
+if false then
+	-- local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Blissful4992/ESPs/main/UniversalSkeleton.lua"))()
+
+	local Skeletons = {}
+	for _, Player in next, game.Players:GetChildren() do
+		if Player ~= LocalPlayer then
+			table.insert(Skeletons, Library:NewSkeleton(Player, true));
+		end
+	end
+	game.Players.PlayerAdded:Connect(function(Player)
+		table.insert(Skeletons, Library:NewSkeleton(Player, true));
+	end)
+
+	while true do
+		for _, skeleton in next, Skeletons do
+			skeleton:SetColor(Color3.fromRGB(skeleton.Player.TeamColor == LocalPlayer.TeamColor and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)));
+			skeleton:SetThickness(4);
+		end
+
+		task.wait(1)
+	end
+end
